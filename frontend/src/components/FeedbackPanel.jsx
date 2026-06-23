@@ -3,6 +3,7 @@ const SCORE_LABELS = {
   approach: 'Approach',
   code_quality: 'Code Quality',
   optimization_awareness: 'Optimization Awareness',
+  communication: 'Communication',
   overall: 'Overall',
 };
 

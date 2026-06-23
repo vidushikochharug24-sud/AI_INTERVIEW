@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+import os
+load_dotenv()
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from groq import Groq
@@ -91,6 +94,7 @@ def get_feedback():
     problem = data.get("problem", {})
     code = data.get("code", "")
     test_results = data.get("test_results", [])
+    transcript = data.get("transcript", "")
 
     passed = sum(1 for r in test_results if r.get("passed"))
     total = len(test_results)
@@ -99,6 +103,7 @@ def get_feedback():
         problem_title=problem.get("title", ""),
         problem_description=problem.get("description", ""),
         code=code,
+        transcript=transcript,
         passed=passed,
         total=total
     )
@@ -176,3 +181,4 @@ Keep responses concise, 2-3 sentences max. Ask only ONE question per message."""
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
+

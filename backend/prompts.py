@@ -40,6 +40,8 @@ The candidate just solved (or attempted) this problem:
 Problem: {problem_title}
 Description: {problem_description}
 
+Verbal explanation given by candidate before coding: {transcript}
+
 Their solution:
 ```python
 {code}
@@ -56,6 +58,7 @@ The JSON must have exactly this structure:
     "approach": 1,
     "code_quality": 1,
     "optimization_awareness": 1,
+    "communication": 1,
     "overall": 1
   }},
   "hire_signal": "Strong Hire | Hire | No Hire",

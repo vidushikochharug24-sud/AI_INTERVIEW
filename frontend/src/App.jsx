@@ -5,6 +5,7 @@ import Editor from './components/Editor';
 import TestResults from './components/TestResults';
 import FeedbackPanel from './components/FeedbackPanel';
 import InterviewerChat from './components/InterviewerChat';
+import VoiceExplanationPanel from './components/VoiceExplanationPanel';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 const TOPICS = ['arrays', 'linked lists', 'trees', 'graphs', 'dp', 'strings'];
@@ -72,6 +73,10 @@ function App() {
   const [runError, setRunError] = useState('');
   const [feedbackError, setFeedbackError] = useState('');
   const [conversationHistory, setConversationHistory] = useState([]);
+  const [voiceModeEnabled, setVoiceModeEnabled] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState('');
+  const [voiceExplanationSubmitted, setVoiceExplanationSubmitted] = useState(false);
+  const [voiceSubmitting, setVoiceSubmitting] = useState(false);
   const [stressModeEnabled, setStressModeEnabled] = useState(false);
   const [stressSessionActive, setStressSessionActive] = useState(false);
   const [timeLimitSeconds, setTimeLimitSeconds] = useState(getTimeLimitSeconds(initialSettings.difficulty));
@@ -80,6 +85,7 @@ function App() {
   );
   const [toasts, setToasts] = useState([]);
   const [timeUpOpen, setTimeUpOpen] = useState(false);
+  const [speechRecognitionSupported, setSpeechRecognitionSupported] = useState(false);
 
   const timerRef = useRef(null);
   const toastIdRef = useRef(1);
@@ -91,10 +97,18 @@ function App() {
     zero: false,
   });
 
+  useEffect(() => {
+    setSpeechRecognitionSupported(
+      typeof window !== 'undefined' && Boolean(window.SpeechRecognition || window.webkitSpeechRecognition),
+    );
+  }, []);
+
   const hasRunResults = useMemo(() => Boolean(testResults?.results?.length), [testResults]);
   const currentLimitSeconds = currentProblem
     ? getTimeLimitSeconds(currentProblem.difficulty || settings.difficulty)
     : getTimeLimitSeconds(settings.difficulty);
+  const voiceFlowActive = voiceModeEnabled && speechRecognitionSupported;
+  const editorLocked = Boolean(currentProblem) && voiceFlowActive && !voiceExplanationSubmitted;
   const remainingForDisplay = stressModeEnabled
     ? stressSessionActive
       ? timeRemainingSeconds
@@ -148,6 +162,8 @@ function App() {
     setTestResults(null);
     setFeedback(null);
     setConversationHistory([]);
+    setVoiceTranscript('');
+    setVoiceExplanationSubmitted(false);
 
     try {
       const response = await axios.post(`${API_BASE_URL}/api/problem`, {
@@ -177,7 +193,6 @@ function App() {
     setRunError('');
     setFeedback(null);
     setFeedbackError('');
-    setConversationHistory([]);
 
     try {
       const response = await axios.post(`${API_BASE_URL}/api/run`, {
@@ -209,10 +224,10 @@ function App() {
         problem: currentProblem,
         code,
         test_results: testResults?.results || [],
+        transcript: voiceTranscript,
       });
 
       setFeedback(response.data?.feedback || null);
-      setConversationHistory([]);
     } catch (error) {
       setFeedbackError(
         error?.response?.data?.error || error?.message || 'Failed to get feedback.',
@@ -225,6 +240,60 @@ function App() {
   const seeFeedbackFromTimeout = async () => {
     setTimeUpOpen(false);
     await getFeedback({ force: true });
+  };
+
+  const toggleVoiceMode = () => {
+    setVoiceModeEnabled((previous) => {
+      const nextValue = !previous;
+
+      setVoiceTranscript('');
+      setVoiceExplanationSubmitted(false);
+
+      if (!nextValue) {
+        setVoiceSubmitting(false);
+      }
+
+      return nextValue;
+    });
+  };
+
+  const submitVoiceExplanation = async (transcript) => {
+    if (!currentProblem || !transcript.trim()) {
+      return;
+    }
+
+    setVoiceSubmitting(true);
+    setFeedbackError('');
+
+    try {
+      const historySnapshot = [...conversationHistory];
+      const response = await axios.post(`${API_BASE_URL}/api/chat`, {
+        problem: {
+          title: currentProblem.title,
+          description: currentProblem.description,
+        },
+        code,
+        conversation_history: historySnapshot,
+        user_message:
+          `The candidate's verbal explanation of their approach before coding: ${transcript}. Evaluate their communication and approach understanding, then ask a follow-up question.`,
+      });
+
+      const assistantMessage = response.data?.response || '';
+
+      setConversationHistory((previous) => [
+        ...previous,
+        { role: 'user', content: transcript },
+        { role: 'assistant', content: assistantMessage },
+      ]);
+      setVoiceTranscript(transcript);
+      setVoiceExplanationSubmitted(true);
+    } catch (error) {
+      setFeedbackError(
+        error?.response?.data?.error || error?.message || 'Failed to submit voice explanation.',
+      );
+    } finally {
+      setVoiceSubmitting(false);
+    }
   };
 
   useEffect(() => {
@@ -310,7 +379,7 @@ function App() {
 
   useEffect(() => {
     if (!feedback) {
-      setConversationHistory([]);
+      return;
     }
   }, [feedback]);
 
@@ -406,6 +475,16 @@ function App() {
               <strong>{stressModeEnabled ? 'On' : 'Off'}</strong>
             </button>
 
+            <button
+              type="button"
+              className={`toggle-button ${voiceModeEnabled ? 'active' : ''}`}
+              onClick={toggleVoiceMode}
+              aria-pressed={voiceModeEnabled}
+            >
+              <span className="toggle-label">Voice Mode</span>
+              <strong>{voiceModeEnabled ? 'On' : 'Off'}</strong>
+            </button>
+
             <button className="primary-button" onClick={getProblem} disabled={problemLoading}>
               {problemLoading ? <span className="spinner" aria-hidden="true" /> : null}
               <span>{problemLoading ? 'Getting Problem' : 'Get Problem'}</span>
@@ -421,6 +500,17 @@ function App() {
           </div>
 
           <div className="panel panel-right">
+            {currentProblem && voiceModeEnabled ? (
+              <VoiceExplanationPanel
+                supported={speechRecognitionSupported}
+                transcript={voiceTranscript}
+                setTranscript={setVoiceTranscript}
+                submitted={voiceExplanationSubmitted}
+                submitting={voiceSubmitting}
+                onSubmitExplanation={submitVoiceExplanation}
+              />
+            ) : null}
+
             <Editor
               code={code}
               setCode={setCode}
@@ -430,6 +520,7 @@ function App() {
               onRunCode={runCode}
               onGetFeedback={() => getFeedback()}
               feedbackEnabled={hasRunResults}
+              locked={editorLocked}
             />
 
             {runError ? <p className="error-banner inline-error">{runError}</p> : null}
