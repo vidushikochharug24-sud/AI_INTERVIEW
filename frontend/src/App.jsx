@@ -7,7 +7,7 @@ import FeedbackPanel from './components/FeedbackPanel';
 import InterviewerChat from './components/InterviewerChat';
 import VoiceExplanationPanel from './components/VoiceExplanationPanel';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://ai-interview-2-i6c6.onrender.com';
 const TOPICS = ['arrays', 'linked lists', 'trees', 'graphs', 'dp', 'strings'];
 const DIFFICULTIES = ['easy', 'medium', 'hard'];
 const COMPANIES = [
@@ -580,3 +580,4 @@ function App() {
 }
 
 export default App;
+
